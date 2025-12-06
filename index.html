@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CS Quiz from API</title>
+  <style>
+    body {
+      background: #1e1e2f;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #eee;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      background: #2a2a47;
+      border-radius: 15px;
+      box-shadow: 0 0 20px #0ff;
+      padding: 25px 30px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    #welcome,
+    #quiz,
+    #score-container,
+    #loading {
+      display: none;
+    }
+
+    #welcome.active,
+    #quiz.active,
+    #score-container.active,
+    #loading.active {
+      display: block;
+    }
+
+    label {
+      font-weight: 600;
+      font-size: 1.2rem;
+      display: block;
+      margin-bottom: 10px;
+    }
+
+    input[type="text"] {
+      padding: 10px;
+      font-size: 1.1rem;
+      border-radius: 10px;
+      border: none;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background: #00ffff;
+      border: none;
+      padding: 12px 25px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #000;
+      font-size: 1rem;
+      transition: background 0.3s;
+    }
+
+    button:disabled {
+      background: #33cccc88;
+      cursor: not-allowed;
+    }
+
+    button:hover:not(:disabled) {
+      background: #00d8d8;
+    }
+
+    .question-number {
+      font-weight: 600;
+      margin-bottom: 15px;
+    }
+
+    .question-text {
+      font-size: 1.25rem;
+      margin-bottom: 20px;
+    }
+
+    .options {
+      list-style: none;
+      padding: 0;
+    }
+
+    .options li {
+      background: #393963;
+      margin-bottom: 10px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: background 0.3s, border-color 0.3s;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .options li.correct {
+      border-color: #0f0;
+      background: #114411;
+    }
+
+    .options li.wrong {
+      border-color: #f00;
+      background: #441111;
+    }
+
+    .options li.disabled {
+      cursor: default;
+    }
+
+    .buttons-container {
+      margin-top: 15px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 15px;
+    }
+
+    .score-container {
+      text-align: center;
+    }
+
+    .score-container h3 {
+      font-size: 2rem;
+      margin-bottom: 10px;
+    }
+
+    .grade {
+      font-size: 1.4rem;
+      margin-top: 15px;
+      font-weight: 700;
+    }
+
+    #loading {
+      font-size: 1.5rem;
+      text-align: center;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <!-- Welcome Screen -->
+    <div id="welcome" class="active" role="form" aria-label="User Name Input">
+      <h2>Welcome to the Computer Science Quiz!</h2>
+      <label for="name-input">Please enter your name:</label>
+      <input type="text" id="name-input" aria-required="true" autocomplete="off" />
+      <button id="start-btn" disabled>Start Quiz</button>
+    </div>
+
+    <!-- Loading -->
+    <div id="loading">Loading questions, please wait...</div>
+
+    <!-- Quiz Screen -->
+    <div id="quiz" role="main" aria-live="polite" aria-atomic="true">
+      <p id="greeting" style="font-weight:600; margin-bottom:15px;"></p>
+      <div class="question-number" id="question-number"></div>
+      <div class="question-text" id="question-text"></div>
+      <ul class="options" id="options-list" role="listbox"></ul>
+      <div class="buttons-container">
+        <button id="finish-btn" disabled>Finish Quiz</button>
+        <button id="next-btn" disabled>Next</button>
+      </div>
+    </div>
+
+    <!-- Score Screen -->
+    <div class="score-container" id="score-container" role="region" aria-live="polite" aria-atomic="true">
+      <h3 id="score-header"></h3>
+      <p id="score-text"></p>
+      <p class="grade" id="grade-text"></p>
+      <button id="restart-btn">Restart Quiz</button>
+    </div>
+  </div>
+
+  <script>
+    const welcomeScreen = document.getElementById('welcome');
+    const startBtn = document.getElementById('start-btn');
+    const nameInput = document.getElementById('name-input');
+
+    const loadingScreen = document.getElementById('loading');
+
+    const quizEl = document.getElementById('quiz');
+    const greetingEl = document.getElementById('greeting');
+    const questionNumberEl = document.getElementById('question-number');
+    const questionTextEl = document.getElementById('question-text');
+    const optionsListEl = document.getElementById('options-list');
+    const nextBtn = document.getElementById('next-btn');
+    const finishBtn = document.getElementById('finish-btn');
+
+    const scoreContainer = document.getElementById('score-container');
+    const scoreHeader = document.getElementById('score-header');
+    const scoreText = document.getElementById('score-text');
+    const gradeText = document.getElementById('grade-text');
+    const restartBtn = document.getElementById('restart-btn');
+
+    let questions = [];
+    let currentQuestionIndex = 0;
+    let score = 0;
+    let selectedAnswer = null;
+    let userName = '';
+
+    // Enable start button only if name input is not empty
+    nameInput.addEventListener('input', () => {
+      startBtn.disabled = !nameInput.value.trim();
+    });
+
+    startBtn.addEventListener('click', () => {
+      userName = nameInput.value.trim();
+      welcomeScreen.classList.remove('active');
+      loadingScreen.classList.add('active');
+      fetchQuestions();
+    });
+
+    async function fetchQuestions() {
+      try {
+        // Open Trivia API for 20 CS questions (Category 18 = Science: Computers)
+        // type=multiple means multiple choice questions
+        const res = await fetch('https://opentdb.com/api.php?amount=20&category=18&type=multiple');
+        const data = await res.json();
+        if (data.response_code !== 0) {
+          alert("Failed to load questions. Try again later.");
+          loadingScreen.classList.remove('active');
+          welcomeScreen.classList.add('active');
+          return;
+        }
+        // Format questions to uniform structure
+        questions = data.results.map(q => {
+          const allOptions = [...q.incorrect_answers];
+          const correctIndex = Math.floor(Math.random() * (allOptions.length + 1));
+          allOptions.splice(correctIndex, 0, q.correct_answer);
+          return {
+            question: decodeHTML(q.question),
+            options: allOptions.map(opt => decodeHTML(opt)),
+            correct_answer: decodeHTML(q.correct_answer)
+          };
+        });
+        loadingScreen.classList.remove('active');
+        quizEl.classList.add('active');
+        greetingEl.textContent = `Good luck, ${userName}!`;
+        currentQuestionIndex = 0;
+        score = 0;
+        showQuestion();
+        nextBtn.disabled = true;
+        finishBtn.disabled = true;
+      } catch (error) {
+        alert("Error fetching questions. Check your internet and try again.");
+        loadingScreen.classList.remove('active');
+        welcomeScreen.classList.add('active');
+      }
+    }
+
+    function decodeHTML(html) {
+      const txt = document.createElement("textarea");
+      txt.innerHTML = html;
+      return txt.value;
+    }
+
+    function showQuestion() {
+      selectedAnswer = null;
+      nextBtn.disabled = true;
+      finishBtn.disabled = true;
+
+      const currentQ = questions[currentQuestionIndex];
+      questionNumberEl.textContent = `Question ${currentQuestionIndex + 1} of ${questions.length}`;
+      questionTextEl.textContent = currentQ.question;
+
+      optionsListEl.innerHTML = '';
+      currentQ.options.forEach(option => {
+        const li = document.createElement('li');
+        li.textContent = option;
+        li.tabIndex = 0;
+        li.setAttribute('role', 'option');
+        li.classList.remove('correct', 'wrong', 'disabled');
+        li.addEventListener('click', () => selectAnswer(li, option));
+        li.addEventListener('keydown', e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            selectAnswer(li, option);
+          }
+        });
+        optionsListEl.appendChild(li);
+      });
+    }
+
+    function selectAnswer(li, answer) {
+      if (selectedAnswer) return; // prevent multiple selections
+      selectedAnswer = answer;
+
+      const currentQ = questions[currentQuestionIndex];
+
+      // Disable all options
+      [...optionsListEl.children].forEach(child => {
+        child.classList.add('disabled');
+      });
+
+      // Mark correct and wrong
+      [...optionsListEl.children].forEach(child => {
+        if (child.textContent === currentQ.correct_answer) {
+          child.classList.add('correct');
+          child.innerHTML = `${child.textContent} ✔️`;
+        } else if (child.textContent === selectedAnswer) {
+          child.classList.add('wrong');
+          child.innerHTML = `${child.textContent} ❌`;
+        }
+      });
+
+      if (selectedAnswer === currentQ.correct_answer) {
+        score++;
+      }
+
+      // Enable buttons
+      if (currentQuestionIndex === questions.length - 1) {
+        finishBtn.disabled = false;
+        nextBtn.disabled = true;
+      } else {
+        nextBtn.disabled = false;
+        finishBtn.disabled = false;
+      }
+    }
+
+    nextBtn.addEventListener('click', () => {
+      currentQuestionIndex++;
+      if (currentQuestionIndex < questions.length) {
+        showQuestion();
+      }
+    });
+
+    finishBtn.addEventListener('click', () => {
+      showScore();
+    });
+
+    function showScore() {
+      quizEl.classList.remove('active');
+      scoreContainer.classList.add('active');
+
+      scoreHeader.textContent = `Well done, ${userName}!`;
+      scoreText.textContent = `You scored ${score} out of ${questions.length}`;
+
+      const percent = (score / questions.length) * 100;
+      let grade = '';
+      if (percent >= 90) grade = 'Excellent 🎉';
+      else if (percent >= 75) grade = 'Good Job 👍';
+      else if (percent >= 50) grade = 'Fair 😐';
+      else grade = 'Needs Improvement 😕';
+
+      gradeText.textContent = grade;
+    }
+
+    restartBtn.addEventListener('click', () => {
+      scoreContainer.classList.remove('active');
+      welcomeScreen.classList.add('active');
+      nameInput.value = '';
+      startBtn.disabled = true;
+    });
+  </script>
+</body>
+
+</html>
